@@ -3,7 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const bodyParser = require('body-parser');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 // Rotas (que criaremos em breve)
 const employeeRoutes = require('./routes/employeeRoutes');
