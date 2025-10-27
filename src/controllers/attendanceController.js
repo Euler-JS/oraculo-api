@@ -46,41 +46,67 @@ exports.getAttendance = async (req, res) => {
 exports.registerAttendance = async (req, res) => {
   try {
     const { employee_id, employee_code, auth_method, observations } = req.body;
-    
-    // Verifica se foi fornecido ID ou código
-    if (!employee_id && !employee_code) {
-      return res.status(400).json({ 
-        message: 'É necessário informar o ID ou código do funcionário' 
-      });
-    }
-    
-    // Busca o funcionário pelo código, se fornecido
     let employeeData;
     
-    if (employee_code) {
-      const { data: employee } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('internal_code', employee_code)
-        .single();
-      
-      if (!employee) {
-        return res.status(404).json({ message: 'Funcionário não encontrado' });
+    // Se auth_method for 'face', usar reconhecimento facial
+    if (auth_method === 'face') {
+      if (!req.file) {
+        return res.status(400).json({ message: 'Imagem da face é obrigatória para autenticação facial' });
       }
       
-      employeeData = employee;
+      // Buscar todos os funcionários com face_embedding
+      const { data: employees } = await supabase
+        .from('employees')
+        .select('id, name, internal_code, face_embedding')
+        .not('face_embedding', 'is', null);
+      
+      if (!employees || employees.length === 0) {
+        return res.status(400).json({ message: 'Nenhum funcionário com face registrada encontrado' });
+      }
+      
+      // Importar função de reconhecimento facial
+      const { findEmployeeByFace } = require('../utils/faceRecognition');
+      
+      // Encontrar funcionário pela face
+      employeeData = await findEmployeeByFace(req.file.buffer, employees);
+      
+      if (!employeeData) {
+        return res.status(404).json({ message: 'Face não reconhecida. Funcionário não identificado.' });
+      }
     } else {
-      const { data: employee } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('id', employee_id)
-        .single();
-        
-      if (!employee) {
-        return res.status(404).json({ message: 'Funcionário não encontrado' });
+      // Método tradicional (código ou ID)
+      if (!employee_id && !employee_code) {
+        return res.status(400).json({ 
+          message: 'É necessário informar o ID ou código do funcionário' 
+        });
       }
       
-      employeeData = employee;
+      // Busca o funcionário pelo código, se fornecido
+      if (employee_code) {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('internal_code', employee_code)
+          .single();
+        
+        if (!employee) {
+          return res.status(404).json({ message: 'Funcionário não encontrado' });
+        }
+        
+        employeeData = employee;
+      } else {
+        const { data: employee } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('id', employee_id)
+          .single();
+          
+        if (!employee) {
+          return res.status(404).json({ message: 'Funcionário não encontrado' });
+        }
+        
+        employeeData = employee;
+      }
     }
     
     // Busca configuração de horário de trabalho

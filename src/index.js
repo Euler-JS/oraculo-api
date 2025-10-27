@@ -11,6 +11,10 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const workScheduleRoutes = require('./routes/workScheduleRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
+const authRoutes = require('./routes/authRoutes');
+
+// Carregar modelos de reconhecimento facial
+const faceRecognition = require('./utils/faceRecognition');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -18,6 +22,7 @@ const port = process.env.PORT || 3000;
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // Para form data
 app.use(morgan('dev'));
 
 // Rotas
@@ -25,6 +30,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/work-schedule', workScheduleRoutes);
 app.use('/api/departments', departmentRoutes);
+app.use('/api/auth', authRoutes);
 
 // Rota para verificar se a API está rodando
 app.get('/api/health', (req, res) => {

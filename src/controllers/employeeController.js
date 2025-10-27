@@ -72,20 +72,28 @@ exports.createEmployee = async (req, res) => {
     // Gerar um código interno se não for fornecido
     let employeeCode = internal_code;
     if (!employeeCode) {
-      // Formato AEM + 3 dígitos aleatórios
-      const randomDigits = Math.floor(Math.random() * 900 + 100);
-      employeeCode = `AEM${randomDigits}`;
-      
-      // Verificar se o código já existe
-      const { data } = await supabase
-        .from('employees')
-        .select('internal_code')
-        .eq('internal_code', employeeCode);
+      // Formato AEM + 4 dígitos aleatórios para reduzir colisões
+      let isUnique = false;
+      let attempts = 0;
+      while (!isUnique && attempts < 10) {
+        const randomDigits = Math.floor(Math.random() * 9000 + 1000); // 1000-9999
+        employeeCode = `AEM${randomDigits}`;
         
-      if (data && data.length > 0) {
-        // Se já existe, gera outro
-        const newRandomDigits = Math.floor(Math.random() * 900 + 100);
-        employeeCode = `AEM${newRandomDigits}`;
+        // Verificar se o código já existe
+        const { data } = await supabase
+          .from('employees')
+          .select('internal_code')
+          .eq('internal_code', employeeCode);
+          
+        if (!data || data.length === 0) {
+          isUnique = true;
+        }
+        attempts++;
+      }
+      
+      if (!isUnique) {
+        // Fallback: usar timestamp
+        employeeCode = `AEM${Date.now().toString().slice(-4)}`;
       }
     }
 
@@ -183,6 +191,53 @@ exports.deleteEmployee = async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao excluir funcionário:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Registrar face do funcionário
+exports.registerFace = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ message: 'Imagem da face é obrigatória' });
+    }
+    
+    // Verifica se o funcionário existe
+    const { data: existingEmployee } = await supabase
+      .from('employees')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (!existingEmployee) {
+      return res.status(404).json({ message: 'Funcionário não encontrado' });
+    }
+    
+    // Importar função de reconhecimento facial
+    const { generateFaceEmbedding } = require('../utils/faceRecognition');
+    
+    // Gerar embedding da face
+    const faceEmbedding = await generateFaceEmbedding(req.file.buffer);
+    
+    // Atualizar funcionário com embedding facial
+    const { data, error } = await supabase
+      .from('employees')
+      .update({
+        face_embedding: JSON.stringify(Array.from(faceEmbedding))
+      })
+      .eq('id', id)
+      .select();
+    
+    if (error) throw error;
+    
+    return res.status(200).json({ 
+      message: 'Face registrada com sucesso',
+      employee: data[0]
+    });
+  } catch (error) {
+    console.error('Erro ao registrar face:', error);
     return res.status(500).json({ error: error.message });
   }
 };
